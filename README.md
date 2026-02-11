@@ -1,5 +1,28 @@
-# Vue 3 + Vite
+# createAMap - 地图编辑器
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+基于 Vue 3 + Konva 的地图区域编辑工具。支持导入/导出 GeoJSON，自定义绘制、切割区域、拖拽调整边界等功能。
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## 功能特性
+
+*   **区域绘制**：自定义绘制多边形区域。
+*   **区域切割**：支持折线、直线切割，支持 MultiPolygon 处理。
+*   **交互编辑**：
+    *   拖拽区域整体移动。
+    *   编辑模式下拖拽节点调整边界。
+    *   编辑模式下拖拽文字标签。
+*   **数据管理**：导入/导出 GeoJSON，本地浏览器缓存保存。
+*   **帮助手册**：内置完整操作指南。
+
+## 技术栈
+
+*   Vue 3
+*   Vite
+*   Konva / vue-konva
+*   Turf.js (地理空间计算)
+
+## 开发运行
+
+```bash
+npm install
+npm run dev
+```
