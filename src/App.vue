@@ -177,6 +177,8 @@ function handleKeydown(e) {
     handleToolChange('draw')
   } else if (e.key === 'm' || e.key === 'M') {
     handleToolChange('marker')
+  } else if (e.key === 's' || e.key === 'S') {
+    handleToolChange('split')
   } else if (e.key === 'Delete') {
     if (editingFeature.value) deleteFeature()
     else if (selectedMarker.value) deleteSelectedMarker()
@@ -199,6 +201,13 @@ function handleToolChange(tool) {
 
   if (tool === 'draw') {
     startDrawing()
+  } else if (tool === 'split') {
+    if (!editingFeature.value) {
+      alert('请先选择要操作的区域')
+      currentTool.value = 'select'
+      return
+    }
+    splitPoints.value = []
   } else if (tool === 'marker') {
     // 标记模式不需要特殊处理
   }
@@ -463,7 +472,7 @@ function cancelDrawing() {
 // ======== 切割 ========
 function handleSplitPoint(geo) {
   splitPoints.value = [...splitPoints.value, { lon: geo.lon, lat: geo.lat }]
-  // 不再自动执行，等待双击完成
+  // 不再自动执行，等待双击完成 (包括 split 和 split-hole)
 }
 
 async function executeSplit() {
@@ -479,17 +488,11 @@ async function executeSplit() {
   let splitResult = null
   let splitIndex = -1 // 仅用于 MultiPolygon，记录被切割的子多边形索引
 
-  // 尝试切割
+  // 1. 尝试常规线性切割
   if (geom.type === 'Polygon') {
-    // Polygon: coordinates = [ring0, ring1...]
     const outerRing = geom.coordinates[0]
-    const res = MapEngine.splitPolygon(outerRing, cutLine)
-    if (res) {
-      splitResult = res
-    }
+    splitResult = MapEngine.splitPolygon(outerRing, cutLine)
   } else if (geom.type === 'MultiPolygon') {
-    // MultiPolygon: coordinates = [polygon0, polygon1...]
-    // polygon = [ring0, ring1...]
     for (let i = 0; i < geom.coordinates.length; i++) {
       const polygon = geom.coordinates[i]
       const outerRing = polygon[0]
@@ -497,72 +500,114 @@ async function executeSplit() {
       if (res) {
         splitResult = res
         splitIndex = i
-        break // 找到一个切割点即停止
+        break
       }
     }
-  } else {
-    alert(`暂不支持 ${geom.type} 类型的切割`)
-    cancelSplit()
-    return
   }
 
-  if (!splitResult) {
-    alert('切割失败：切割线必须穿过某个区域的两条边界，请调整切割线位置后重试')
-    splitPoints.value = []
-    return
-  }
-
-  const [polyA, polyB] = splitResult
-
-  // 弹出对话框让用户命名新区域
-  const newName = await showDialog('切割区域', '输入新区域名称', `${feature.name || '区域'}_分割`)
-
-  if (!newName) {
-    // 用户取消
-    splitPoints.value = []
-    return
-  }
-
-  // 更新原区域（使用 polyA）
-  if (geom.type === 'Polygon') {
-    feature.geometry = {
-      type: 'Polygon',
-      coordinates: [polyA]
+  // 2. 如果切割失败，判断是否为内部挖洞（全内部封闭图形）
+  let isHole = false
+  let holeContainerIndex = -1
+  if (!splitResult && cutLine.length >= 3) {
+    if (geom.type === 'Polygon') {
+      if (MapEngine.pointInPolygon(cutLine[0], geom.coordinates[0])) {
+        isHole = true
+      }
+    } else if (geom.type === 'MultiPolygon') {
+      for (let i = 0; i < geom.coordinates.length; i++) {
+        const outerRing = geom.coordinates[i][0]
+        if (MapEngine.pointInPolygon(cutLine[0], outerRing)) {
+          isHole = true
+          holeContainerIndex = i
+          break
+        }
+      }
     }
-  } else if (geom.type === 'MultiPolygon') {
-    // 更新 MultiPolygon 中被切割的那一个子多边形
-    // 注意：polyA 是一个环的数组 [outerRing]，直接作为 polygon 的 coordinates
-    // 实际上 MapEngine.splitPolygon 返回的是闭合的环坐标数组 coordinates
-    // 我们的 polyA 结构是 [{lon,lat}, ...]，即一个 ring
-    // 但 MapEngine.splitPolygon 返回的是 [polyA, polyB]，其中 polyA 是 ring
-    // 而 Polygon 的 coordinates 是 [ring, hole1, hole2...]
-    // 所以这里需要把 polyA 包装成 [polyA]
-    geom.coordinates[splitIndex] = [polyA]
-    // 触发更新
+  }
+
+  if (!splitResult && !isHole) {
+    alert('操作失败：切割线必须穿过区域边界（线性切割），或在区域内部绘制完全封闭的多边形（区域挖洞）。')
+    splitPoints.value = []
+    return
+  }
+
+  if (isHole) {
+    // --- 执行挖洞逻辑 ---
+    const holePoints = cutLine.map(p => ({ lon: p.lon, lat: p.lat }))
+    holePoints.push({ ...holePoints[0] }) // 闭合
+
+    const newName = await showDialog('挖出新区域', '输入新内嵌区域名称', `${feature.name || '区域'}_内部`)
+    if (!newName) {
+      splitPoints.value = []
+      return
+    }
+
+    if (geom.type === 'Polygon') {
+      geom.coordinates.push(holePoints)
+    } else if (geom.type === 'MultiPolygon') {
+      geom.coordinates[holeContainerIndex].push(holePoints)
+    }
+
+    const newFeature = {
+      id: `hole_${Date.now()}`,
+      name: newName,
+      properties: {
+        ...(feature.properties || {}),
+        name: newName
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [holePoints]
+      },
+      visible: true,
+      selected: false,
+      color: generateColor()
+    }
+
     feature.geometry = { ...geom }
+    features.value.push(newFeature)
+
+  } else {
+    // --- 执行线性切割逻辑 ---
+    const [polyA, polyB] = splitResult
+
+    const newName = await showDialog('切割区域', '输入新区域名称', `${feature.name || '区域'}_分割`)
+    if (!newName) {
+      splitPoints.value = []
+      return
+    }
+
+    // 更新原区域
+    if (geom.type === 'Polygon') {
+      feature.geometry = {
+        type: 'Polygon',
+        coordinates: [polyA]
+      }
+    } else if (geom.type === 'MultiPolygon') {
+      geom.coordinates[splitIndex] = [polyA]
+      feature.geometry = { ...geom }
+    }
+
+    // 创建新区域
+    const newFeature = {
+      id: `split_${Date.now()}`,
+      name: newName,
+      properties: {
+        ...(feature.properties || {}),
+        name: newName
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [polyB]
+      },
+      visible: true,
+      selected: false,
+      color: generateColor()
+    }
+    features.value.push(newFeature)
   }
 
-  // 创建新区域（使用 polyB）
-  // 新区域统一作为 Polygon 类型
-  const newFeature = {
-    id: `split_${Date.now()}`,
-    name: newName,
-    properties: {
-      ...(feature.properties || {}),
-      name: newName
-    },
-    geometry: {
-      type: 'Polygon',
-      coordinates: [polyB] // polyB 是 ring，需要包一层
-    },
-    visible: true,
-    selected: false,
-    color: generateColor()
-  }
-
-  features.value.push(newFeature)
-
-  // 清理
+  // 清理状态
   splitPoints.value = []
   currentTool.value = 'select'
   editingFeature.value = null

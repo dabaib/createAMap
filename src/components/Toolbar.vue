@@ -68,7 +68,7 @@
         :class="{ active: currentTool === 'split' }"
         @click="$emit('toolChange', 'split')"
         :disabled="!canSplit"
-        title="切割区域 (S)"
+        title="切割 / 挖洞 (S)"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <line x1="12" y1="2" x2="12" y2="22"/>

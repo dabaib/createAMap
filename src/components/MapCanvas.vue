@@ -126,10 +126,10 @@
       <span>点击添加节点 | 双击完成绘制 | 右键取消</span>
     </div>
 
-    <!-- 切割提示 -->
+    <!-- 切割/挖洞提示 -->
     <div v-if="currentTool === 'split'" class="canvas-hint split-hint">
-      <span v-if="splitPoints.length === 0">先选择要切割的区域，然后点击绘制切割线</span>
-      <span v-else>点击添加节点 | 双击完成切割 | 右键取消</span>
+      <span v-if="splitPoints.length === 0">先选择区域，然后点击绘制切割线或封闭的多边形进行挖洞</span>
+      <span v-else>点击添加节点 | 双击完成切割/挖洞 | 右键取消</span>
     </div>
 
     <!-- 编辑提示 -->
@@ -559,6 +559,7 @@ function getSplitPointConfig(pt, index) {
 // 切割预览线（最后一个点 → 鼠标位置）
 const splitPreviewConfig = computed(() => {
   if (props.splitPoints.length === 0 || !mouseGeo.value) return { points: [], visible: false }
+
   const lastPoint = props.splitPoints[props.splitPoints.length - 1]
   const p1 = engine.geoToCanvas(lastPoint.lon, lastPoint.lat)
   const p2 = engine.geoToCanvas(mouseGeo.value.lon, mouseGeo.value.lat)
