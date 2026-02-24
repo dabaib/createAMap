@@ -59,6 +59,28 @@
         </label>
       </div>
 
+      <!-- 选中节点展示与编辑 -->
+      <div v-if="selectedNode" class="node-edit-section">
+        <div class="property-group">
+          <label>选中节点 - 经度</label>
+          <input
+            type="number"
+            step="0.000001"
+            v-model.number="nodeLon"
+            @change="updateNode"
+          />
+        </div>
+        <div class="property-group">
+          <label>选中节点 - 纬度</label>
+          <input
+            type="number"
+            step="0.000001"
+            v-model.number="nodeLat"
+            @change="updateNode"
+          />
+        </div>
+      </div>
+
       <div class="action-buttons">
         <button class="btn btn-danger" @click="deleteFeature">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -131,16 +153,19 @@ import { ref, watch, computed } from 'vue'
 
 const props = defineProps({
   feature: { type: Object, default: null },
-  marker: { type: Object, default: null }
+  marker: { type: Object, default: null },
+  selectedNode: { type: Object, default: null }
 })
 
-const emit = defineEmits(['update', 'delete', 'updateMarker', 'deleteMarker'])
+const emit = defineEmits(['update', 'delete', 'updateNode', 'updateMarker', 'deleteMarker'])
 
 const localName = ref('')
 const localColor = ref('#4ecdc4')
 const localAdcode = ref('')
 const markerName = ref('')
 const markerColor = ref('#e74c3c')
+const nodeLon = ref(0)
+const nodeLat = ref(0)
 
 // 监听 feature 变化
 watch(() => props.feature, (newFeature) => {
@@ -158,6 +183,14 @@ watch(() => props.marker, (newMarker) => {
     markerColor.value = newMarker.color || '#e74c3c'
   }
 }, { immediate: true })
+
+// 监听 selectedNode 变化
+watch(() => props.selectedNode, (newNode) => {
+  if (newNode && newNode.coord) {
+    nodeLon.value = Number(newNode.coord.lon?.toFixed(6)) || 0
+    nodeLat.value = Number(newNode.coord.lat?.toFixed(6)) || 0
+  }
+}, { immediate: true, deep: true })
 
 // 计算节点数量
 const nodeCount = computed(() => {
@@ -198,6 +231,16 @@ function deleteFeature() {
   if (confirm('确定要删除该区域吗？')) {
     emit('delete')
   }
+}
+
+function updateNode() {
+  // 必须保证输入的是有效数字
+  if (isNaN(nodeLon.value) || isNaN(nodeLat.value)) return
+  emit('updateNode', {
+    ...props.selectedNode,
+    lon: nodeLon.value,
+    lat: nodeLat.value
+  })
 }
 
 function updateMarkerName() {
@@ -294,9 +337,33 @@ function deleteMarker() {
   border-color: #74b9ff;
 }
 
-.property-group input[type="text"]:disabled {
+.property-group input[type="text"]:disabled,
+.property-group input[type="number"]:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.property-group input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  background: #1a1a2e;
+  border: 1px solid #3d4852;
+  border-radius: 8px;
+  color: #dfe6e9;
+  font-size: 13px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.property-group input[type="number"]:focus {
+  outline: none;
+  border-color: #74b9ff;
+}
+
+.node-edit-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed #3d4852;
 }
 
 .color-input {

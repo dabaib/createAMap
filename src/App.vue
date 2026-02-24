@@ -38,10 +38,12 @@
         :bounds="bounds"
         :currentTool="currentTool"
         :editingFeature="editingFeature"
+        :selectedNode="selectedNode"
         :drawingPoints="drawingPoints"
         :splitPoints="splitPoints"
         @featureClick="handleFeatureClick"
         @featureHover="handleFeatureHover"
+        @nodeClick="handleNodeClick"
         @nodeDragEnd="handleNodeDragEnd"
         @featureDragEnd="handleFeatureDragEnd"
         @addPoint="handleAddPoint"
@@ -55,8 +57,10 @@
       <PropertyPanel
         :feature="editingFeature"
         :marker="selectedMarker"
+        :selectedNode="selectedNode"
         @update="updateFeature"
         @delete="deleteFeature"
+        @updateNode="handleUpdateNode"
         @updateMarker="updateMarker"
         @deleteMarker="deleteSelectedMarker"
       />
@@ -114,6 +118,7 @@ const bounds = ref(null)
 const showHelp = ref(false)
 const currentTool = ref('select')
 const editingFeature = ref(null)
+const selectedNode = ref(null)
 const selectedMarker = ref(null)
 const drawingPoints = ref([])
 const splitPoints = ref([])
@@ -197,6 +202,10 @@ function handleToolChange(tool) {
   if (currentTool.value === 'split' && tool !== 'split') {
     cancelSplit()
   }
+  if (currentTool.value === 'edit' && tool !== 'edit') {
+    selectedNode.value = null
+  }
+  
   currentTool.value = tool
 
   if (tool === 'draw') {
@@ -232,6 +241,7 @@ function onFileSelected(e) {
       features.value = result.features
       bounds.value = result.bounds
       editingFeature.value = null
+      selectedNode.value = null
       selectedMarker.value = null
       saveState()
       autoSave()
@@ -292,6 +302,7 @@ function applyState(state) {
   if (editingFeature.value) {
     editingFeature.value = features.value.find(f => f.id === editingFeature.value.id) || null
   }
+  selectedNode.value = null
   recalcBounds()
   autoSave()
 }
@@ -313,6 +324,7 @@ function selectFeature(feature) {
   } else {
     editingFeature.value = null
   }
+  selectedNode.value = null
   selectedMarker.value = null
 }
 
@@ -360,11 +372,36 @@ function deleteFeature() {
   }
 }
 
-// ======== 节点拖拽 ========
+// ======== 节点编辑与拖拽 ========
+function handleNodeClick(node) {
+  selectedNode.value = node
+}
+
+function handleUpdateNode(updatedNodeInfo) {
+  if (!editingFeature.value || !selectedNode.value) return
+  
+  const { coord, lon, lat } = updatedNodeInfo
+  coord.lon = lon
+  coord.lat = lat
+  
+  // 更新 selectedNode 强制刷新属性面板显示（虽然通过引用已经改了，但为了触发 watch）
+  selectedNode.value = { ...updatedNodeInfo }
+  
+  saveState()
+  recalcBounds()
+  autoSave()
+}
+
 function handleNodeDragEnd({ coord, lon, lat }) {
   // 直接修改原始坐标对象
   coord.lon = lon
   coord.lat = lat
+  
+  // 若正是当前选中节点，也要同步更新一下以触发响应式
+  if (selectedNode.value && selectedNode.value.coord === coord) {
+    selectedNode.value = { ...selectedNode.value, lon, lat }
+  }
+  
   saveState()
   recalcBounds()
   autoSave()
@@ -648,6 +685,7 @@ function selectMarker(marker) {
   markers.value.forEach(m => m.selected = false)
   features.value.forEach(f => f.selected = false)
   editingFeature.value = null
+  selectedNode.value = null
 
   if (marker) {
     marker.selected = true

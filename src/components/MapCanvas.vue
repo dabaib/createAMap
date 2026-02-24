@@ -71,6 +71,7 @@
           v-for="node in editNodeList"
           :key="node.key"
           :config="node.circleConfig"
+          @click="(e) => onNodeClick(e, node)"
           @dragstart="(e) => onNodeDragStart(e, node)"
           @dragmove="(e) => onNodeDragMove(e, node)"
           @dragend="(e) => onNodeDragEnd(e, node)"
@@ -160,6 +161,7 @@ const props = defineProps({
   bounds: { type: Object, default: null },
   currentTool: { type: String, default: 'select' },
   editingFeature: { type: Object, default: null },
+  selectedNode: { type: Object, default: null },
   drawingPoints: { type: Array, default: () => [] },
   splitPoints: { type: Array, default: () => [] }
 })
@@ -167,6 +169,7 @@ const props = defineProps({
 const emit = defineEmits([
   'featureClick',
   'featureHover',
+  'nodeClick',
   'nodeDragEnd',
   'featureDragEnd',
   'addPoint',
@@ -335,6 +338,10 @@ const editNodeList = computed(() => {
       if (coord == null || coord.lon == null || coord.lat == null) continue
       const pos = engine.geoToCanvas(coord.lon, coord.lat)
       if (isNaN(pos.x) || isNaN(pos.y)) continue
+      const isSelected = props.selectedNode?.key === `n-${polygonIndex}-${ringIndex}-${i}`
+      const fillColor = isSelected ? '#f1c40f' : '#e74c3c'
+      const strokeColor = isSelected ? '#34495e' : '#ffffff'
+      const zIndex = isSelected ? 10 : 1
       nodes.push({
         key: `n-${polygonIndex}-${ringIndex}-${i}`,
         coord,
@@ -344,11 +351,11 @@ const editNodeList = computed(() => {
         circleConfig: {
           x: pos.x,
           y: pos.y,
-          radius: 4,
-          fill: '#e74c3c',
-          stroke: '#ffffff',
-          strokeWidth: 1.5,
-          hitStrokeWidth: 12, // 保持容易点击和拖拽
+          radius: isSelected ? 4 : 2,
+          fill: fillColor,
+          stroke: strokeColor,
+          strokeWidth: isSelected ? 1.5 : 1,
+          hitStrokeWidth: 4, // 减小热区，避免点密集时相互遮挡
           draggable: true,
           perfectDrawEnabled: false
         }
@@ -372,6 +379,14 @@ const editNodeList = computed(() => {
 })
 
 // ======== 节点拖拽 — 仅在 dragEnd 时提交变更 ========
+function onNodeClick(e, node) {
+  e.cancelBubble = true
+  // 拖拽结束时也会触发 click，所以可以用 drag 状态判断，但这里单纯点击也是需要的
+  if (props.currentTool === 'edit') {
+    emit('nodeClick', node)
+  }
+}
+
 function onNodeDragStart(e, node) {
   isDraggingNode = true
   // 禁止 stage 拖拽
