@@ -344,10 +344,11 @@ const editNodeList = computed(() => {
         circleConfig: {
           x: pos.x,
           y: pos.y,
-          radius: 7,
+          radius: 4,
           fill: '#e74c3c',
           stroke: '#ffffff',
-          strokeWidth: 2.5,
+          strokeWidth: 1.5,
+          hitStrokeWidth: 12, // 保持容易点击和拖拽
           draggable: true,
           perfectDrawEnabled: false
         }
