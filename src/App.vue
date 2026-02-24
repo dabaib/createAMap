@@ -236,7 +236,7 @@ function onFileSelected(e) {
 
 function handleExport() {
   const geojson = GeoJsonParser.exportFeaturesToGeoJson(features.value)
-  const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify(geojson)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
